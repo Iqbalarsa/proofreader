@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Proofreader — Non-AI Academic Grammar & Style Linter
+
+A distraction-free, zero-AI academic proofreading and grammar checking assistant designed with Apple-inspired Liquid Glass aesthetics. Built strictly on deterministic rule-based NLP to protect authentic author voice and ensure 100% academic integrity against AI detectors.
+
+---
+
+## Highlights & Features
+
+- **Pure Non-AI Linter:** Powered by LanguageTool's deterministic rule-based engine. Zero generative paraphrasing or rewriting — preserving the authenticity and original style of academic manuscripts, theses, and essays.
+- **Apple Liquid Glass Aesthetic:** Clean frosted-glass translucent UI with fluid backdrop blurs, soft ambient lighting, minimal pill buttons, and zero clutter or decorative icon distractions.
+- **Real-Time Split-Screen Workspace:**
+  - **Writing Canvas (Left):** Comfortable ~75ch reading width, dual **Write** and **Review** modes, interactive cursor tracking that syncs with correction cards.
+  - **Suggestions Feed (Right):** Categorized rule cards (*Subject-Verb Agreement*, *Article Usage*, *Punctuation*, *Spelling*), before/after diff pills, educational grammar feedback, and one-click *Accept*, *Dismiss*, or *Accept All*.
+- **Integrated Draft History:** Automatic background saves as you type, plus manual snapshots with relative timestamps (`just now`, `5m ago`), word counts, preview snippets, `.txt` download, and JSON backup export.
+- **Custom Academic Jargon Whitelist:** Add specialized terminology, field abbreviations, or scientific notation (*CRISPR-Cas9*, *heteroscedasticity*, *p-value*) to avoid false-positive spelling alerts.
+- **Confidentiality / Docker Ready:** Use the default official public LanguageTool API with zero registration, or switch to a private local Docker container (`http://localhost:8010/v2/check`) via Engine Settings for 100% offline data privacy.
+
+---
+
+## Tech Stack
+
+- **Framework:** Next.js 14 (App Router)
+- **Styling:** Tailwind CSS (Custom Liquid Glassmorphism)
+- **Engine:** LanguageTool HTTP API (Public / Local Docker)
+- **State & Storage:** React 18, HTML5 LocalStorage
+- **Language:** TypeScript
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### 1. Prerequisites
+- Node.js 18+ (tested on Node.js v24)
+- npm or yarn / pnpm
 
+### 2. Installation
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Clone the repository
+git clone https://github.com/Iqbalarsa/proofreader.git
+cd proofreader
+
+# Install dependencies
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Running Locally
+```bash
+# Development mode
+npm run dev
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# Or build and start production server
+npm run build
+npm run start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## License
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT License. Open source and free for academic and personal use.
