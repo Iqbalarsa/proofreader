@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
       customEndpoint,
       mode = 'fast',
       geminiApiKey,
+      geminiModel,
     } = body;
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ==========================================
-    // MODE: DEEP (Google Gemini with Strict Diff-Lock)
+    // MODE: DEEP (Google Gemini 3.5 Flash Lite with Strict Diff-Lock)
     // ==========================================
     if (mode === 'deep') {
       const apiKey = geminiApiKey?.trim() || process.env.GEMINI_API_KEY?.trim();
@@ -133,14 +134,44 @@ export async function POST(req: NextRequest) {
 
         const userPrompt = `Periksa tata bahasa dan konsistensi level kalimat pada naskah berikut (Dialek: ${language}):\n\n"""\n${text}\n"""`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: userPrompt,
-          config: {
-            systemInstruction,
-            responseMimeType: 'application/json',
-          },
-        });
+        const primaryModel =
+          geminiModel?.trim() ||
+          process.env.GEMINI_MODEL?.trim() ||
+          'gemini-3.5-flash-lite';
+
+        let response;
+        try {
+          response = await ai.models.generateContent({
+            model: primaryModel,
+            contents: userPrompt,
+            config: {
+              systemInstruction,
+              responseMimeType: 'application/json',
+            },
+          });
+        } catch (callErr: unknown) {
+          const errStr = String((callErr as Error)?.message || '');
+          if (
+            errStr.includes('404') ||
+            errStr.includes('NOT_FOUND') ||
+            errStr.includes('no longer available') ||
+            errStr.includes('not found')
+          ) {
+            // Check if error recommendation mentions a specific model, e.g. gemini-3.8-flash
+            const matchRec = errStr.match(/models\/(gemini-[a-zA-Z0-9.-]+)/);
+            const fallbackModel = matchRec ? matchRec[1] : 'gemini-3.8-flash';
+            response = await ai.models.generateContent({
+              model: fallbackModel,
+              contents: userPrompt,
+              config: {
+                systemInstruction,
+                responseMimeType: 'application/json',
+              },
+            });
+          } else {
+            throw callErr;
+          }
+        }
 
         const rawJson = response.text?.trim() || '[]';
         let parsedItems: LLMCorrectionItem[] = [];
@@ -217,6 +248,7 @@ export async function POST(req: NextRequest) {
           matches: deepMatches,
           count: deepMatches.length,
           mode: 'deep',
+          model: primaryModel,
         });
       } catch (geminiErr: unknown) {
         console.error('Gemini Deep Check Error:', geminiErr);
