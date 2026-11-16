@@ -7,7 +7,7 @@ import { RightPanel } from '@/components/RightPanel';
 import { HistoryModal } from '@/components/HistoryModal';
 import { JargonModal } from '@/components/JargonModal';
 import { SettingsModal } from '@/components/SettingsModal';
-import { GrammarMatch, HistoryItem, AppSettings } from '@/types';
+import { GrammarMatch, DocumentItem, AppSettings } from '@/types';
 import {
   applySingleReplacement,
   applyAllReplacements,
@@ -15,12 +15,13 @@ import {
   calculateMetrics,
 } from '@/lib/offsetManager';
 import {
-  getHistory,
-  saveHistoryItem,
-  deleteHistoryItem,
-  clearAllHistory,
-  saveCurrentDraft,
-  getCurrentDraft,
+  getAllDocuments,
+  getOrInitActiveDocument,
+  saveOrUpdateDocument,
+  createNewDocument,
+  deleteDocument,
+  clearAllDocuments,
+  setActiveDocumentId,
 } from '@/lib/historyStorage';
 import {
   getJargonList,
@@ -40,23 +41,26 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export default function ProofreaderPage() {
+  const [currentDocId, setCurrentDocId] = useState<string>('');
+  const [docTitle, setDocTitle] = useState<string>('Untitled Document');
   const [text, setText] = useState<string>('');
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+
   const [matches, setMatches] = useState<GrammarMatch[]>([]);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [language, setLanguage] = useState<string>('en-US');
 
   // Modals
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
   const [isJargonOpen, setIsJargonOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Storage states
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [jargonList, setJargonList] = useState<string[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
-  // Temporary feedback flags
+  // Feedback flags
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState(false);
 
@@ -66,19 +70,13 @@ export default function ProofreaderPage() {
 
   // Initial load from localStorage
   useEffect(() => {
-    const loadedDraft = getCurrentDraft();
-    const loadedHistory = getHistory();
-    const loadedJargon = getJargonList();
+    const activeDoc = getOrInitActiveDocument(ACADEMIC_SAMPLES[0].text);
+    setCurrentDocId(activeDoc.id);
+    setDocTitle(activeDoc.title);
+    setText(activeDoc.content);
+    setDocuments(getAllDocuments());
 
-    setHistory(loadedHistory);
-    setJargonList(loadedJargon);
-
-    if (loadedDraft && loadedDraft.trim().length > 0) {
-      setText(loadedDraft);
-    } else {
-      // Default to Sample 1
-      setText(ACADEMIC_SAMPLES[0].text);
-    }
+    setJargonList(getJargonList());
   }, []);
 
   // Filter matches whenever raw matches or jargon list updates
@@ -135,24 +133,16 @@ export default function ProofreaderPage() {
     []
   );
 
-  // Debounced auto-check & auto-save whenever text or language changes
+  // Debounced auto-save and auto-check
   useEffect(() => {
-    if (!text) {
-      setMatches([]);
-      return;
-    }
+    if (!currentDocId) return;
 
-    // Auto-save current draft continuously
-    saveCurrentDraft(text);
-
-    // Auto-save to history after typing settles
+    // In-place auto-save (updates current document in localStorage, does NOT add new history)
     if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
     autoSaveDebounceRef.current = setTimeout(() => {
-      const saved = saveHistoryItem(text, matches.length, undefined, true);
-      if (saved) {
-        setHistory(getHistory());
-      }
-    }, 4000);
+      saveOrUpdateDocument(currentDocId, text, docTitle, matches.length);
+      setDocuments(getAllDocuments());
+    }, 1500);
 
     // Auto-check grammar after 1.5s of no typing
     if (settings.autoCheck) {
@@ -166,7 +156,7 @@ export default function ProofreaderPage() {
       if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current);
       if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
     };
-  }, [text, language, settings, runGrammarCheck, matches.length]);
+  }, [text, docTitle, currentDocId, language, settings, runGrammarCheck, matches.length]);
 
   // Apply single replacement
   const handleApplyFix = (matchId: string, replacement: string) => {
@@ -212,63 +202,87 @@ export default function ProofreaderPage() {
     setTimeout(() => setCopyFeedback(false), 2000);
   };
 
-  // Manual save snapshot to history
-  const handleSaveSnapshot = () => {
-    if (!text.trim()) return;
-    const saved = saveHistoryItem(text, activeMatches.length, undefined, false);
-    if (saved) {
-      setHistory(getHistory());
-      setSaveFeedback(true);
-      setTimeout(() => setSaveFeedback(false), 2000);
-    }
+  // Manual save: updates the current document in-place
+  const handleSaveDocument = () => {
+    if (!currentDocId) return;
+    saveOrUpdateDocument(currentDocId, text, docTitle, activeMatches.length);
+    setDocuments(getAllDocuments());
+    setSaveFeedback(true);
+    setTimeout(() => setSaveFeedback(false), 2000);
   };
 
-  // Load sample academic text
+  // Load sample academic text into current document
   const handleLoadSample = (sample: AcademicSample) => {
     setText(sample.text);
+    setDocTitle(sample.title);
     setActiveMatchId(null);
+    saveOrUpdateDocument(currentDocId, sample.text, sample.title, 0);
+    setDocuments(getAllDocuments());
     runGrammarCheck(sample.text, language, settings);
   };
 
   // Clear canvas
   const handleClearText = () => {
-    if (text.trim() && window.confirm('Clear all text from canvas?')) {
-      saveHistoryItem(text, activeMatches.length, 'Archived Before Clearing', false);
-      setHistory(getHistory());
+    if (text.trim() && window.confirm('Clear all text from current document?')) {
       setText('');
       setMatches([]);
       setActiveMatchId(null);
+      saveOrUpdateDocument(currentDocId, '', docTitle, 0);
+      setDocuments(getAllDocuments());
     }
   };
 
-  // Load specific item from history
-  const handleLoadHistoryItem = (item: HistoryItem) => {
-    setText(item.content);
+  // Switch to another document
+  const handleSelectDocument = (doc: DocumentItem) => {
+    // Save current doc first
+    if (currentDocId) {
+      saveOrUpdateDocument(currentDocId, text, docTitle, activeMatches.length);
+    }
+    setCurrentDocId(doc.id);
+    setActiveDocumentId(doc.id);
+    setDocTitle(doc.title);
+    setText(doc.content);
+    setDocuments(getAllDocuments());
     setActiveMatchId(null);
-    runGrammarCheck(item.content, language, settings);
+    runGrammarCheck(doc.content, language, settings);
   };
 
-  // Delete item from history
-  const handleDeleteHistoryItem = (id: string) => {
-    const updated = deleteHistoryItem(id);
-    setHistory(updated);
-  };
-
-  // Clear all history
-  const handleClearAllHistory = () => {
-    clearAllHistory();
-    setHistory([]);
-  };
-
-  // Start fresh document
-  const handleNewDraft = () => {
-    if (text.trim()) {
-      saveHistoryItem(text, activeMatches.length, undefined, false);
-      setHistory(getHistory());
+  // Create a brand new document
+  const handleNewDocument = () => {
+    if (currentDocId) {
+      saveOrUpdateDocument(currentDocId, text, docTitle, activeMatches.length);
     }
+    const newDoc = createNewDocument('Untitled Document', '');
+    setCurrentDocId(newDoc.id);
+    setDocTitle(newDoc.title);
+    setText(newDoc.content);
+    setMatches([]);
+    setActiveMatchId(null);
+    setDocuments(getAllDocuments());
+  };
+
+  // Delete a document
+  const handleDeleteDocument = (id: string) => {
+    const { remainingDocs, newActiveDoc } = deleteDocument(id);
+    setDocuments(remainingDocs);
+    if (newActiveDoc) {
+      setCurrentDocId(newActiveDoc.id);
+      setDocTitle(newActiveDoc.title);
+      setText(newActiveDoc.content);
+      setActiveMatchId(null);
+      runGrammarCheck(newActiveDoc.content, language, settings);
+    }
+  };
+
+  // Clear all documents
+  const handleClearAllDocuments = () => {
+    const fresh = clearAllDocuments();
+    setCurrentDocId(fresh.id);
+    setDocTitle(fresh.title);
     setText('');
     setMatches([]);
     setActiveMatchId(null);
+    setDocuments([fresh]);
   };
 
   return (
@@ -296,10 +310,10 @@ export default function ProofreaderPage() {
         onCheckNow={() => runGrammarCheck(text, language, settings)}
         onCopyText={handleCopyText}
         copyFeedback={copyFeedback}
-        onSaveSnapshot={handleSaveSnapshot}
+        onSaveSnapshot={handleSaveDocument}
         saveFeedback={saveFeedback}
-        historyCount={history.length}
-        onOpenHistory={() => setIsHistoryOpen(true)}
+        docCount={documents.length}
+        onOpenDocuments={() => setIsDocsOpen(true)}
         jargonCount={jargonList.length}
         onOpenJargon={() => setIsJargonOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -311,6 +325,8 @@ export default function ProofreaderPage() {
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden max-w-7xl w-full mx-auto pb-4">
         {/* Left Panel: Writing Canvas */}
         <LeftPanel
+          title={docTitle}
+          onTitleChange={(val) => setDocTitle(val)}
           text={text}
           onTextChange={(val) => setText(val)}
           matches={activeMatches}
@@ -332,15 +348,16 @@ export default function ProofreaderPage() {
         />
       </main>
 
-      {/* History Modal */}
+      {/* Documents Modal */}
       <HistoryModal
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        history={history}
-        onLoadItem={handleLoadHistoryItem}
-        onDeleteItem={handleDeleteHistoryItem}
-        onClearAll={handleClearAllHistory}
-        onNewDraft={handleNewDraft}
+        isOpen={isDocsOpen}
+        onClose={() => setIsDocsOpen(false)}
+        documents={documents}
+        activeDocId={currentDocId}
+        onSelectDocument={handleSelectDocument}
+        onDeleteDocument={handleDeleteDocument}
+        onClearAll={handleClearAllDocuments}
+        onNewDocument={handleNewDocument}
       />
 
       {/* Academic Jargon Whitelist Modal */}

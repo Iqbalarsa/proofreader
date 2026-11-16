@@ -34,6 +34,59 @@ interface LanguageToolRawMatch {
   };
 }
 
+// Supplementary deterministic collocation rules to catch idioms that POS taggers miss
+interface SupplementaryRule {
+  id: string;
+  category: { id: string; name: string };
+  pattern: RegExp;
+  extract: (m: RegExpExecArray) => {
+    offset: number;
+    length: number;
+    originalText: string;
+    replacement: string;
+    message: string;
+    shortMessage: string;
+  };
+}
+
+const SUPPLEMENTARY_RULES: SupplementaryRule[] = [
+  {
+    id: 'COLLOCATION_MAKE_SENSE',
+    category: { id: 'COLLOCATIONS', name: 'Idiom & Collocation' },
+    pattern: /\b(make|makes|making|made)\s+(sensed)\b/gi,
+    extract: (m) => {
+      const verb = m[1];
+      const offset = m.index + verb.length + 1;
+      return {
+        offset,
+        length: 6,
+        originalText: 'sensed',
+        replacement: 'sense',
+        message:
+          "In the idiom 'make sense', use the noun 'sense' instead of the verb/participle 'sensed'.",
+        shortMessage: "Did you mean 'sense'?",
+      };
+    },
+  },
+  {
+    id: 'COLLOCATION_TAKE_FOR_GRANTED',
+    category: { id: 'COLLOCATIONS', name: 'Idiom & Collocation' },
+    pattern: /\b(take|takes|taking|took|taken)\s+(for\s+granite)\b/gi,
+    extract: (m) => {
+      const verb = m[1];
+      const offset = m.index + verb.length + 1;
+      return {
+        offset,
+        length: 11,
+        originalText: 'for granite',
+        replacement: 'for granted',
+        message: "The standard English idiom is 'take for granted'.",
+        shortMessage: "Idiom: 'take for granted'",
+      };
+    },
+  },
+];
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -51,7 +104,7 @@ export async function POST(req: NextRequest) {
     params.append('enabledOnly', 'false');
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
     let response: Response;
     try {
@@ -135,6 +188,42 @@ export async function POST(req: NextRequest) {
         };
       }
     );
+
+    // Apply supplementary deterministic collocation rules
+    for (const rule of SUPPLEMENTARY_RULES) {
+      const regex = new RegExp(rule.pattern.source, rule.pattern.flags);
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(text)) !== null) {
+        const extracted = rule.extract(match);
+        // Check if an existing match already covers this range
+        const alreadyFlagged = mappedMatches.some(
+          (m) =>
+            Math.max(m.offset, extracted.offset) <
+            Math.min(m.offset + m.length, extracted.offset + extracted.length)
+        );
+
+        if (!alreadyFlagged) {
+          mappedMatches.push({
+            id: `supp_${rule.id}_${extracted.offset}_${extracted.length}`,
+            offset: extracted.offset,
+            length: extracted.length,
+            originalText: extracted.originalText,
+            message: extracted.message,
+            shortMessage: extracted.shortMessage,
+            replacements: [{ value: extracted.replacement }],
+            rule: {
+              id: rule.id,
+              description: extracted.message,
+              issueType: 'grammar',
+              category: rule.category,
+            },
+          });
+        }
+      }
+    }
+
+    // Sort all matches by character offset
+    mappedMatches.sort((a, b) => a.offset - b.offset);
 
     return NextResponse.json({
       matches: mappedMatches,

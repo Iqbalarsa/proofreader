@@ -17,8 +17,8 @@ interface TopBarProps {
   copyFeedback: boolean;
   onSaveSnapshot: () => void;
   saveFeedback: boolean;
-  historyCount: number;
-  onOpenHistory: () => void;
+  docCount: number;
+  onOpenDocuments: () => void;
   jargonCount: number;
   onOpenJargon: () => void;
   onOpenSettings: () => void;
@@ -36,8 +36,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   copyFeedback,
   onSaveSnapshot,
   saveFeedback,
-  historyCount,
-  onOpenHistory,
+  docCount,
+  onOpenDocuments,
   jargonCount,
   onOpenJargon,
   onOpenSettings,
@@ -121,12 +121,12 @@ export const TopBar: React.FC<TopBarProps> = ({
             {saveFeedback ? 'Saved' : 'Save'}
           </button>
 
-          {/* History Button */}
+          {/* Documents / Drafts Button */}
           <button
-            onClick={onOpenHistory}
+            onClick={onOpenDocuments}
             className="px-3.5 py-1.5 rounded-full bg-white/80 hover:bg-white text-neutral-700 hover:text-neutral-900 border border-neutral-200/70 shadow-sm font-medium transition-all"
           >
-            History ({historyCount})
+            Docs ({docCount})
           </button>
 
           {/* More Menu Dropdown for Secondary Settings & Samples */}

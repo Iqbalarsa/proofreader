@@ -4,6 +4,8 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { GrammarMatch } from '@/types';
 
 interface LeftPanelProps {
+  title: string;
+  onTitleChange: (val: string) => void;
   text: string;
   onTextChange: (val: string) => void;
   matches: GrammarMatch[];
@@ -14,6 +16,8 @@ interface LeftPanelProps {
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
+  title,
+  onTitleChange,
   text,
   onTextChange,
   matches,
@@ -67,7 +71,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
       const matchText = text.substring(m.offset, m.offset + m.length);
       const isGrammar =
-        m.rule.category.id === 'GRAMMAR' || m.rule.issueType === 'grammar';
+        m.rule.category.id === 'GRAMMAR' ||
+        m.rule.category.id === 'COLLOCATIONS' ||
+        m.rule.issueType === 'grammar';
       const isActive = m.id === activeMatchId;
 
       elements.push(
@@ -122,7 +128,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
       {/* Liquid Glass Canvas Container */}
       <div className="liquid-glass rounded-3xl flex-1 flex flex-col overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.03)] border border-white/80">
         {/* Canvas Toolbar: Ultra-Clean Mode Switcher */}
-        <div className="flex items-center justify-between border-b border-neutral-200/50 px-6 py-3 bg-white/40 backdrop-blur-md select-none text-xs">
+        <div className="flex items-center justify-between border-b border-neutral-200/50 px-5 sm:px-6 py-2.5 bg-white/40 backdrop-blur-md select-none text-xs">
           {/* View Mode Toggle Pill */}
           <div className="flex items-center p-0.5 bg-neutral-200/50 rounded-full border border-neutral-300/30">
             <button
@@ -154,7 +160,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
         {/* Floating Context Pill when caret lands on an error */}
         {viewMode === 'edit' && cursorMatch && (
-          <div className="bg-neutral-100/80 backdrop-blur-md border-b border-neutral-200/60 px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="bg-neutral-100/80 backdrop-blur-md border-b border-neutral-200/60 px-5 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-mono uppercase text-[10px] bg-neutral-800 text-white px-2 py-0.5 rounded-full">
                 {cursorMatch.rule.category.name}
@@ -190,9 +196,19 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           </div>
         )}
 
-        {/* Main Writing Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-8 sm:px-10 flex justify-center">
-          <div className="w-full max-w-[76ch] min-h-[450px] flex flex-col text-[16px] leading-[1.8] text-neutral-800 font-normal">
+        {/* Main Writing Area with Compact Natural Margins & Title */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 sm:px-8 flex flex-col">
+          {/* Document Title Input (Optional, Apple Notes / Word Style) */}
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="Untitled Document"
+            className="w-full text-lg sm:text-xl font-medium tracking-tight text-neutral-900 bg-transparent focus:outline-none placeholder:text-neutral-300 pb-2 mb-3 border-b border-neutral-100/80 focus:border-neutral-300 transition"
+          />
+
+          {/* Text Editor Canvas */}
+          <div className="w-full flex-1 flex flex-col text-[15px] sm:text-[16px] leading-[1.75] text-neutral-800 font-normal">
             {viewMode === 'edit' ? (
               <textarea
                 ref={textareaRef}
@@ -201,23 +217,22 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                 onClick={handleCursorMove}
                 onKeyUp={handleCursorMove}
                 onSelect={handleCursorMove}
-                placeholder="Paste or type your thesis chapter, research abstract, or essay here...
+                placeholder="Start typing your thesis, research paper, or essay here...
 
-The non-AI proofreader checks grammar, spelling, and style without rewriting or changing your original author voice."
-                className="w-full flex-1 bg-transparent text-neutral-900 resize-none focus:outline-none placeholder:text-neutral-400 font-sans tracking-normal"
+The proofreader checks grammar, spelling, and collocations without altering your natural author style."
+                className="w-full flex-1 bg-transparent text-neutral-900 resize-none focus:outline-none placeholder:text-neutral-300 font-sans tracking-normal min-h-[380px]"
                 spellCheck={false}
-                autoFocus
               />
             ) : (
               <div
                 onClick={() => onSelectMatch(null)}
-                className="w-full flex-1 text-neutral-900 cursor-text select-text font-sans tracking-normal"
+                className="w-full flex-1 text-neutral-900 cursor-text select-text font-sans tracking-normal min-h-[380px]"
               >
                 {text ? (
                   renderedTextElements
                 ) : (
                   <div className="text-neutral-400 italic">
-                    Canvas is currently empty. Switch to Write mode or select a sample manuscript from the More menu.
+                    Document is empty. Switch to Write mode or select a sample manuscript from the More menu.
                   </div>
                 )}
               </div>
@@ -226,9 +241,9 @@ The non-AI proofreader checks grammar, spelling, and style without rewriting or 
         </div>
 
         {/* Canvas Footer */}
-        <div className="border-t border-neutral-200/40 px-6 py-2.5 bg-white/30 backdrop-blur-md text-[11px] text-neutral-400 flex items-center justify-between select-none">
-          <span>100% Non-AI • Authentic Academic Integrity</span>
-          <span>Optimal reading width ~75ch</span>
+        <div className="border-t border-neutral-200/40 px-5 sm:px-6 py-2 bg-white/30 backdrop-blur-md text-[11px] text-neutral-400 flex items-center justify-between select-none">
+          <span>Non-AI Linter • Preserves Authentic Author Voice</span>
+          <span>Auto-saved to device</span>
         </div>
       </div>
     </section>

@@ -1,115 +1,199 @@
-import { HistoryItem } from '@/types';
+import { DocumentItem } from '@/types';
 
-const HISTORY_KEY = 'academic_proofreader_history_v1';
-const DRAFT_KEY = 'academic_proofreader_current_draft_v1';
+const DOCUMENTS_KEY = 'academic_proofreader_documents_v2';
+const ACTIVE_DOC_ID_KEY = 'academic_proofreader_active_doc_id_v2';
 
-export function getHistory(): HistoryItem[] {
+export function getAllDocuments(): DocumentItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(DOCUMENTS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw);
+    const list: DocumentItem[] = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
   } catch (e) {
-    console.error('Failed to load history from localStorage', e);
+    console.error('Failed to load documents from localStorage', e);
     return [];
   }
 }
 
-export function saveHistoryItem(
-  content: string,
-  issueCount: number = 0,
-  titleOverride?: string,
-  isAutoSaved: boolean = false
-): HistoryItem | null {
+export function getActiveDocumentId(): string | null {
   if (typeof window === 'undefined') return null;
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-
   try {
-    const history = getHistory();
-    const words = trimmed.split(/\s+/).filter(Boolean).length;
-    const charCount = content.length;
-
-    // Generate smart title from first sentence or first 50 chars
-    const firstLine = trimmed.split('\n')[0].replace(/[#*_`]/g, '').trim();
-    const title =
-      titleOverride ||
-      (firstLine.length > 55 ? firstLine.slice(0, 52) + '...' : firstLine) ||
-      'Untitled Draft';
-
-    // If auto-saved, check if previous item was also auto-saved recently (< 3 minutes ago) and update it
-    const now = Date.now();
-    if (isAutoSaved && history.length > 0) {
-      const latest = history[0];
-      if (latest.isAutoSaved && now - latest.timestamp < 3 * 60 * 1000) {
-        latest.content = content;
-        latest.timestamp = now;
-        latest.wordCount = words;
-        latest.charCount = charCount;
-        latest.issueCount = issueCount;
-        latest.title = title;
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-        return latest;
-      }
-    }
-
-    const newItem: HistoryItem = {
-      id: 'hist_' + now + '_' + Math.random().toString(36).substring(2, 7),
-      title,
-      content,
-      timestamp: now,
-      wordCount: words,
-      charCount,
-      issueCount,
-      isAutoSaved,
-    };
-
-    // Keep max 50 recent items
-    const updated = [newItem, ...history].slice(0, 50);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
-    return newItem;
-  } catch (e) {
-    console.error('Failed to save history item', e);
+    return localStorage.getItem(ACTIVE_DOC_ID_KEY);
+  } catch {
     return null;
   }
 }
 
-export function deleteHistoryItem(id: string): HistoryItem[] {
-  if (typeof window === 'undefined') return [];
+export function setActiveDocumentId(id: string): void {
+  if (typeof window === 'undefined') return;
   try {
-    const history = getHistory();
-    const updated = history.filter((item) => item.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+    localStorage.setItem(ACTIVE_DOC_ID_KEY, id);
+  } catch {
+    console.error('Failed to set active document id');
+  }
+}
+
+export function getOrInitActiveDocument(defaultContent: string = ''): DocumentItem {
+  if (typeof window === 'undefined') {
+    return {
+      id: 'doc_default',
+      title: 'Untitled Document',
+      content: defaultContent,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      wordCount: 0,
+      charCount: 0,
+      issueCount: 0,
+    };
+  }
+
+  const docs = getAllDocuments();
+  const activeId = getActiveDocumentId();
+
+  if (activeId) {
+    const found = docs.find((d) => d.id === activeId);
+    if (found) return found;
+  }
+
+  if (docs.length > 0) {
+    setActiveDocumentId(docs[0].id);
+    return docs[0];
+  }
+
+  // Create initial document
+  const trimmed = defaultContent.trim();
+  const words = trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0;
+  const newDoc: DocumentItem = {
+    id: 'doc_' + Date.now(),
+    title: 'Research Abstract',
+    content: defaultContent,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    wordCount: words,
+    charCount: defaultContent.length,
+    issueCount: 0,
+  };
+
+  localStorage.setItem(DOCUMENTS_KEY, JSON.stringify([newDoc]));
+  setActiveDocumentId(newDoc.id);
+  return newDoc;
+}
+
+export function saveOrUpdateDocument(
+  id: string,
+  content: string,
+  title?: string,
+  issueCount: number = 0
+): DocumentItem {
+  const docs = getAllDocuments();
+  const now = Date.now();
+  const trimmed = content.trim();
+  const words = trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0;
+
+  // Determine smart title if not provided or empty
+  let finalTitle = title?.trim();
+  if (!finalTitle) {
+    const firstLine = trimmed.split('\n')[0].replace(/[#*_`]/g, '').trim();
+    finalTitle =
+      firstLine.length > 40
+        ? firstLine.slice(0, 37) + '...'
+        : firstLine || 'Untitled Document';
+  }
+
+  const existingIndex = docs.findIndex((d) => d.id === id);
+
+  if (existingIndex !== -1) {
+    // UPDATE EXISTING DOCUMENT IN-PLACE (No duplicate history!)
+    const current = docs[existingIndex];
+    const updated: DocumentItem = {
+      ...current,
+      title: finalTitle,
+      content,
+      updatedAt: now,
+      wordCount: words,
+      charCount: content.length,
+      issueCount,
+    };
+
+    docs[existingIndex] = updated;
+    localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(docs));
+    setActiveDocumentId(id);
     return updated;
-  } catch (e) {
-    console.error('Failed to delete history item', e);
-    return [];
+  } else {
+    // Create new document if ID was not found
+    const newDoc: DocumentItem = {
+      id,
+      title: finalTitle,
+      content,
+      createdAt: now,
+      updatedAt: now,
+      wordCount: words,
+      charCount: content.length,
+      issueCount,
+    };
+
+    const updatedList = [newDoc, ...docs];
+    localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(updatedList));
+    setActiveDocumentId(id);
+    return newDoc;
   }
 }
 
-export function clearAllHistory(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem(HISTORY_KEY);
-  } catch {
-    console.error('Failed to clear history');
-  }
+export function createNewDocument(
+  title: string = 'Untitled Document',
+  content: string = ''
+): DocumentItem {
+  const docs = getAllDocuments();
+  const now = Date.now();
+  const trimmed = content.trim();
+  const words = trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0;
+
+  const newDoc: DocumentItem = {
+    id: 'doc_' + now + '_' + Math.random().toString(36).substring(2, 6),
+    title: title.trim() || 'Untitled Document',
+    content,
+    createdAt: now,
+    updatedAt: now,
+    wordCount: words,
+    charCount: content.length,
+    issueCount: 0,
+  };
+
+  const updatedList = [newDoc, ...docs];
+  localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(updatedList));
+  setActiveDocumentId(newDoc.id);
+  return newDoc;
 }
 
-export function saveCurrentDraft(content: string): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(DRAFT_KEY, content);
-  } catch {
-    console.error('Failed to save draft');
+export function deleteDocument(id: string): {
+  remainingDocs: DocumentItem[];
+  newActiveDoc: DocumentItem | null;
+} {
+  const docs = getAllDocuments();
+  const remaining = docs.filter((d) => d.id !== id);
+  localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(remaining));
+
+  let newActiveDoc: DocumentItem | null = null;
+  const currentActiveId = getActiveDocumentId();
+
+  if (currentActiveId === id) {
+    if (remaining.length > 0) {
+      newActiveDoc = remaining[0];
+      setActiveDocumentId(newActiveDoc.id);
+    } else {
+      // Create a fresh blank document
+      newActiveDoc = createNewDocument('Untitled Document', '');
+    }
+  } else {
+    newActiveDoc = remaining.find((d) => d.id === currentActiveId) || remaining[0] || null;
   }
+
+  return { remainingDocs: remaining, newActiveDoc };
 }
 
-export function getCurrentDraft(): string {
-  if (typeof window === 'undefined') return '';
-  try {
-    return localStorage.getItem(DRAFT_KEY) || '';
-  } catch {
-    return '';
-  }
+export function clearAllDocuments(): DocumentItem {
+  localStorage.removeItem(DOCUMENTS_KEY);
+  localStorage.removeItem(ACTIVE_DOC_ID_KEY);
+  return createNewDocument('Untitled Document', '');
 }

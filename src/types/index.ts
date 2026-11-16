@@ -34,15 +34,15 @@ export interface GrammarMatch {
   };
 }
 
-export interface HistoryItem {
+export interface DocumentItem {
   id: string;
   title: string;
   content: string;
-  timestamp: number;
+  updatedAt: number;
+  createdAt: number;
   wordCount: number;
   charCount: number;
   issueCount: number;
-  isAutoSaved?: boolean;
 }
 
 export interface AppSettings {
