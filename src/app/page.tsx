@@ -70,6 +70,7 @@ export default function ProofreaderPage() {
   const autoSaveDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const matchesRef = useRef<GrammarMatch[]>(matches);
   matchesRef.current = matches;
+  const checkedTextRef = useRef<string>('');
 
   // Initial load from localStorage
   useEffect(() => {
@@ -154,6 +155,9 @@ export default function ProofreaderPage() {
       checkDebounceRef.current = null;
     }
 
+    // Mark current text as checked so auto-check won't re-run and overwrite results
+    checkedTextRef.current = text;
+
     setIsCheckingDeep(true);
     try {
       const res = await fetch('/api/check', {
@@ -186,30 +190,47 @@ export default function ProofreaderPage() {
     }
   };
 
-  // Debounced auto-save and auto-check
+  // 1. In-place Auto-Save
   useEffect(() => {
     if (!currentDocId) return;
 
-    // In-place auto-save (updates current document in localStorage, does NOT add new history)
     if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
     autoSaveDebounceRef.current = setTimeout(() => {
       saveOrUpdateDocument(currentDocId, text, docTitle, matchesRef.current.length);
       setDocuments(getAllDocuments());
     }, 1500);
 
-    // Auto-check grammar after 1.5s of no typing
-    if (settings.autoCheck && !isCheckingDeep) {
+    return () => {
+      if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
+    };
+  }, [text, docTitle, currentDocId]);
+
+  // 2. Debounced Auto-Check (Only when text actually changes from user typing)
+  useEffect(() => {
+    const clean = text.trim();
+    if (!clean) {
+      setMatches([]);
+      checkedTextRef.current = '';
+      return;
+    }
+
+    // If text has already been checked (by Deep Check or previous run), do NOT overwrite!
+    if (text === checkedTextRef.current) {
+      return;
+    }
+
+    if (settings.autoCheck) {
       if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current);
       checkDebounceRef.current = setTimeout(() => {
+        checkedTextRef.current = text;
         runGrammarCheck(text, language, settings);
       }, 1500);
     }
 
     return () => {
       if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current);
-      if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
     };
-  }, [text, docTitle, currentDocId, language, settings, isCheckingDeep, runGrammarCheck]);
+  }, [text, language, settings, runGrammarCheck]);
 
   // Apply single replacement
   const handleApplyFix = (matchId: string, replacement: string) => {
@@ -219,6 +240,7 @@ export default function ProofreaderPage() {
       matchId,
       replacement
     );
+    checkedTextRef.current = updatedText;
     setText(updatedText);
     setMatches(updatedMatches);
     setActiveMatchId(null);

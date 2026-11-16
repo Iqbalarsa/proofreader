@@ -130,9 +130,36 @@ export async function POST(req: NextRequest) {
       try {
         const ai = new GoogleGenAI({ apiKey });
 
-        const systemInstruction = `Anda adalah pemeriksa tata bahasa akademik (grammar linter), BUKAN penulis ulang. Tugas Anda HANYA menemukan kesalahan grammar, konsistensi tenses antar klausa, subject-verb agreement, preposisi, artikel (a/an/the), dan tanda baca. DILARANG KERAS memparafrase kalimat, mengganti kosakata dengan sinonim (misal mengubah 'use' menjadi 'utilize'), atau merombak struktur kalimat asli penulis. Kembalikan output HANYA dalam JSON array: [{"original": "kata/frasa yang keliru", "fixed": "perbaikan minimal", "category": "Grammar / Tense Consistency / Subject-Verb Agreement", "explanation": "penjelasan aturan tata bahasa"}]. Jika tidak ada kesalahan, kembalikan [].`;
+        const systemInstruction = `You are a strict academic grammar linter and proofreader for university theses and research papers. You are NOT an editor, writer, or paraphraser.
 
-        const userPrompt = `Periksa tata bahasa dan konsistensi level kalimat pada naskah berikut (Dialek: ${language}):\n\n"""\n${text}\n"""`;
+CORE PRINCIPLE: PRESERVE 100% OF THE AUTHOR'S ORIGINAL VOICE, VOCABULARY, AND SENTENCE STRUCTURE.
+Your SOLE task is to detect and correct objective grammatical errors:
+1. Subject-Verb Agreement (e.g. "results shows" -> "results show", "networks suffers" -> "networks suffer")
+2. Tense Inconsistencies across clauses (e.g. improper tense shifts within research descriptions)
+3. Articles (a / an / the / zero article before scientific terms and count/mass nouns)
+4. Prepositions & Academic Idiom Collocations (e.g. "doesn't make sensed" -> "doesn't make sense", "correlated to" -> "correlated with")
+5. Singular / Plural Noun Agreement (e.g. "datas" -> "data", "each layers" -> "each layer", "these phenomenon" -> "these phenomena")
+6. Punctuation Errors (comma splices, misplaced semicolons)
+
+STRICT ANTI-PARAPHRASE ENFORCEMENT:
+- NEVER rewrite or rephrase sentences.
+- NEVER substitute words with "fancier" academic synonyms (e.g. DO NOT change "use" to "utilize", "show" to "demonstrate", "find" to "discover", or "big" to "substantial").
+- The "fixed" value must be the MINIMAL surgical grammatical fix (1 to 3 words only) required to correct the error.
+- The "original" value MUST be an exact verbatim case-sensitive substring present in the author's text.
+- Provide a clear, educational grammatical explanation in English.
+
+Output format MUST be a valid JSON array only:
+[
+  {
+    "original": "exact error substring from text",
+    "fixed": "minimal surgical grammatical fix",
+    "category": "Subject-Verb Agreement / Tense Consistency / Article Usage / Collocation / Punctuation",
+    "explanation": "concise grammatical explanation in English"
+  }
+]
+If the text contains no grammatical errors, return [].`;
+
+        const userPrompt = `Examine this academic thesis draft for grammatical errors only (Target dialect: ${language}):\n\n"""\n${text}\n"""`;
 
         const primaryModel =
           geminiModel?.trim() ||
