@@ -68,6 +68,8 @@ export default function ProofreaderPage() {
   // Debounce refs
   const checkDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const autoSaveDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const matchesRef = useRef<GrammarMatch[]>(matches);
+  matchesRef.current = matches;
 
   // Initial load from localStorage
   useEffect(() => {
@@ -146,6 +148,12 @@ export default function ProofreaderPage() {
     const clean = text.trim();
     if (!clean) return;
 
+    // Clear any pending fast check timeout so it does not overwrite deep check results
+    if (checkDebounceRef.current) {
+      clearTimeout(checkDebounceRef.current);
+      checkDebounceRef.current = null;
+    }
+
     setIsCheckingDeep(true);
     try {
       const res = await fetch('/api/check', {
@@ -165,14 +173,14 @@ export default function ProofreaderPage() {
       } else {
         alert(
           data.error ||
-            'Gagal menjalankan Deep Sentence Check. Pastikan GEMINI_API_KEY sudah dikonfigurasi.'
+            'Failed to execute Deep Sentence Check. Please check your GEMINI_API_KEY in Settings or .env.local.'
         );
         if (data.error?.includes('GEMINI_API_KEY')) {
           setIsSettingsOpen(true);
         }
       }
     } catch (err: unknown) {
-      alert(`Gagal menghubungi server: ${(err as Error)?.message}`);
+      alert(`Failed to connect to server: ${(err as Error)?.message}`);
     } finally {
       setIsCheckingDeep(false);
     }
@@ -185,12 +193,12 @@ export default function ProofreaderPage() {
     // In-place auto-save (updates current document in localStorage, does NOT add new history)
     if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
     autoSaveDebounceRef.current = setTimeout(() => {
-      saveOrUpdateDocument(currentDocId, text, docTitle, matches.length);
+      saveOrUpdateDocument(currentDocId, text, docTitle, matchesRef.current.length);
       setDocuments(getAllDocuments());
     }, 1500);
 
     // Auto-check grammar after 1.5s of no typing
-    if (settings.autoCheck) {
+    if (settings.autoCheck && !isCheckingDeep) {
       if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current);
       checkDebounceRef.current = setTimeout(() => {
         runGrammarCheck(text, language, settings);
@@ -201,7 +209,7 @@ export default function ProofreaderPage() {
       if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current);
       if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
     };
-  }, [text, docTitle, currentDocId, language, settings, runGrammarCheck, matches.length]);
+  }, [text, docTitle, currentDocId, language, settings, isCheckingDeep, runGrammarCheck]);
 
   // Apply single replacement
   const handleApplyFix = (matchId: string, replacement: string) => {
@@ -359,8 +367,6 @@ export default function ProofreaderPage() {
         saveFeedback={saveFeedback}
         docCount={documents.length}
         onOpenDocuments={() => setIsDocsOpen(true)}
-        onRunDeepCheck={handleRunDeepCheck}
-        isCheckingDeep={isCheckingDeep}
         jargonCount={jargonList.length}
         onOpenJargon={() => setIsJargonOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -381,6 +387,8 @@ export default function ProofreaderPage() {
           onSelectMatch={(m) => setActiveMatchId(m ? m.id : null)}
           onApplyFix={handleApplyFix}
           onIgnoreMatch={handleIgnoreMatch}
+          onRunDeepCheck={handleRunDeepCheck}
+          isCheckingDeep={isCheckingDeep}
         />
 
         {/* Right Panel: Suggestions & Educational Feedback */}

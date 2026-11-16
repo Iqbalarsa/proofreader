@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              'GEMINI_API_KEY belum dikonfigurasi. Silakan tambahkan GEMINI_API_KEY pada file .env.local atau di menu Engine Settings.',
+              'GEMINI_API_KEY is not configured. Please add GEMINI_API_KEY in your .env.local file or in Engine Settings.',
           },
           { status: 400 }
         );
@@ -226,12 +226,12 @@ export async function POST(req: NextRequest) {
             originalText: origStr,
             message:
               item.explanation ||
-              'Perlu perbaikan tata bahasa atau konsistensi kalimat.',
+              'Grammatical consistency correction recommended.',
             shortMessage: item.category || 'Deep Check',
             replacements: [{ value: fixedStr }],
             rule: {
               id: `DEEP_${(item.category || 'GRAMMAR').replace(/\s+/g, '_').toUpperCase()}`,
-              description: item.explanation || 'Aturan konsistensi kalimat',
+              description: item.explanation || 'Sentence consistency rule',
               issueType: 'grammar',
               category: {
                 id: 'DEEP_SENTENCE_CHECK',
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
         console.error('Gemini Deep Check Error:', geminiErr);
         return NextResponse.json(
           {
-            error: `Gagal menjalankan Deep Sentence Check via Gemini: ${(geminiErr as Error)?.message}`,
+            error: `Failed to execute Deep Sentence Check via Gemini: ${(geminiErr as Error)?.message}`,
             details: (geminiErr as Error)?.message,
           },
           { status: 502 }

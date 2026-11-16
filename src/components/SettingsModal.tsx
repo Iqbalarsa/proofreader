@@ -232,7 +232,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Google Gemini API Key (Deep Sentence Check)
             </div>
             <p className="text-neutral-600 leading-relaxed">
-              Diperlukan untuk menjalankan fitur <strong>Deep Sentence Check</strong> (model: <code>gemini-3.5-flash-lite</code>) dengan Strict Diff-Lock anti-paraphrase. Dapat juga diset melalui file <code>.env.local</code>.
+              Required for <strong>Deep Sentence Check</strong> (model: <code>gemini-3.5-flash-lite</code>) with Strict Diff-Lock anti-paraphrasing. Can also be set in <code>.env.local</code>.
             </p>
             <input
               type="password"

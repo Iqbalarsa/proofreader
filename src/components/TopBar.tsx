@@ -19,8 +19,6 @@ interface TopBarProps {
   saveFeedback: boolean;
   docCount: number;
   onOpenDocuments: () => void;
-  onRunDeepCheck: () => void;
-  isCheckingDeep: boolean;
   jargonCount: number;
   onOpenJargon: () => void;
   onOpenSettings: () => void;
@@ -40,8 +38,6 @@ export const TopBar: React.FC<TopBarProps> = ({
   saveFeedback,
   docCount,
   onOpenDocuments,
-  onRunDeepCheck,
-  isCheckingDeep,
   jargonCount,
   onOpenJargon,
   onOpenSettings,
@@ -94,33 +90,20 @@ export const TopBar: React.FC<TopBarProps> = ({
             {isChecking
               ? 'Checking...'
               : issueCount > 0
-              ? `${issueCount} issues`
-              : 'All clear'}
+                ? `${issueCount} issues`
+                : 'All clear'}
           </span>
         </div>
 
         {/* Right: Essential Clean Liquid Glass Actions */}
         <div className="flex items-center gap-2 text-xs">
-          {/* Deep Sentence Check Button */}
-          <button
-            onClick={onRunDeepCheck}
-            disabled={isCheckingDeep || isChecking}
-            className="px-3.5 py-1.5 rounded-full bg-neutral-900 hover:bg-black text-white font-medium shadow-sm transition-all disabled:opacity-50 text-xs border border-black/20"
-            title="Pemeriksaan tata bahasa level kalimat menggunakan Gemini dengan Strict Diff-Lock"
-          >
-            {isCheckingDeep
-              ? 'Memeriksa Kalimat...'
-              : 'Periksa Level Kalimat (Deep Check)'}
-          </button>
-
           {/* Copy Button */}
           <button
             onClick={onCopyText}
-            className={`px-3.5 py-1.5 rounded-full font-medium transition-all ${
-              copyFeedback
+            className={`px-3.5 py-1.5 rounded-full font-medium transition-all ${copyFeedback
                 ? 'bg-neutral-900 text-white shadow-sm'
                 : 'bg-white/80 hover:bg-white text-neutral-700 hover:text-neutral-900 border border-neutral-200/70 shadow-sm'
-            }`}
+              }`}
           >
             {copyFeedback ? 'Copied' : 'Copy'}
           </button>
@@ -128,11 +111,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           {/* Save Button */}
           <button
             onClick={onSaveSnapshot}
-            className={`px-3.5 py-1.5 rounded-full font-medium transition-all ${
-              saveFeedback
+            className={`px-3.5 py-1.5 rounded-full font-medium transition-all ${saveFeedback
                 ? 'bg-neutral-900 text-white shadow-sm'
                 : 'bg-white/80 hover:bg-white text-neutral-700 hover:text-neutral-900 border border-neutral-200/70 shadow-sm'
-            }`}
+              }`}
           >
             {saveFeedback ? 'Saved' : 'Save'}
           </button>

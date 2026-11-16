@@ -13,6 +13,8 @@ interface LeftPanelProps {
   onSelectMatch: (match: GrammarMatch | null) => void;
   onApplyFix: (matchId: string, replacement: string) => void;
   onIgnoreMatch: (matchId: string) => void;
+  onRunDeepCheck: () => void;
+  isCheckingDeep: boolean;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -25,6 +27,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   onSelectMatch,
   onApplyFix,
   onIgnoreMatch,
+  onRunDeepCheck,
+  isCheckingDeep,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [viewMode, setViewMode] = useState<'edit' | 'inspect'>('edit');
@@ -241,9 +245,22 @@ The proofreader checks grammar, spelling, and collocations without altering your
         </div>
 
         {/* Canvas Footer */}
-        <div className="border-t border-neutral-200/40 px-5 sm:px-6 py-2 bg-white/30 backdrop-blur-md text-[11px] text-neutral-400 flex items-center justify-between select-none">
-          <span>Non-AI Linter • Preserves Authentic Author Voice</span>
-          <span>Auto-saved to device</span>
+        <div className="border-t border-neutral-200/40 px-5 sm:px-6 py-2.5 bg-white/30 backdrop-blur-md text-[11px] text-neutral-400 flex items-center justify-between select-none">
+          <div className="flex items-center gap-2">
+            <span>Non-AI Linter • Preserves Authentic Voice</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onRunDeepCheck}
+              disabled={isCheckingDeep}
+              className="px-3.5 py-1 rounded-full bg-neutral-900 hover:bg-black text-white font-medium shadow-sm transition-all disabled:opacity-50 text-xs cursor-pointer"
+              title="Sentence-level grammar check using Gemini with Strict Diff-Lock"
+            >
+              {isCheckingDeep ? 'Checking...' : 'Deep Check'}
+            </button>
+            <span className="hidden sm:inline">Auto-saved to device</span>
+          </div>
         </div>
       </div>
     </section>
