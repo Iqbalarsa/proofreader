@@ -52,4 +52,5 @@ export interface AppSettings {
   fontFamily: 'serif' | 'sans' | 'mono';
   fontSize: 'sm' | 'base' | 'lg';
   autoCheck: boolean;
+  geminiApiKey?: string;
 }

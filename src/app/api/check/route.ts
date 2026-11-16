@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GrammarMatch, ReplacementOption } from '@/types';
+import { GoogleGenAI } from '@google/genai';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,7 @@ interface LanguageToolRawMatch {
   };
 }
 
-// Supplementary deterministic collocation rules to catch idioms that POS taggers miss
+// Supplementary deterministic collocation rules
 interface SupplementaryRule {
   id: string;
   category: { id: string; name: string };
@@ -87,16 +88,153 @@ const SUPPLEMENTARY_RULES: SupplementaryRule[] = [
   },
 ];
 
+interface LLMCorrectionItem {
+  original: string;
+  fixed: string;
+  category: string;
+  explanation: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { text, language = 'en-US', customEndpoint } = body;
+    const {
+      text,
+      language = 'en-US',
+      customEndpoint,
+      mode = 'fast',
+      geminiApiKey,
+    } = body;
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
-      return NextResponse.json({ matches: [], count: 0 });
+      return NextResponse.json({ matches: [], count: 0, mode });
     }
 
-    const targetUrl = customEndpoint?.trim() || 'https://api.languagetool.org/v2/check';
+    // ==========================================
+    // MODE: DEEP (Google Gemini with Strict Diff-Lock)
+    // ==========================================
+    if (mode === 'deep') {
+      const apiKey = geminiApiKey?.trim() || process.env.GEMINI_API_KEY?.trim();
+
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            error:
+              'GEMINI_API_KEY belum dikonfigurasi. Silakan tambahkan GEMINI_API_KEY pada file .env.local atau di menu Engine Settings.',
+          },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const ai = new GoogleGenAI({ apiKey });
+
+        const systemInstruction = `Anda adalah pemeriksa tata bahasa akademik (grammar linter), BUKAN penulis ulang. Tugas Anda HANYA menemukan kesalahan grammar, konsistensi tenses antar klausa, subject-verb agreement, preposisi, artikel (a/an/the), dan tanda baca. DILARANG KERAS memparafrase kalimat, mengganti kosakata dengan sinonim (misal mengubah 'use' menjadi 'utilize'), atau merombak struktur kalimat asli penulis. Kembalikan output HANYA dalam JSON array: [{"original": "kata/frasa yang keliru", "fixed": "perbaikan minimal", "category": "Grammar / Tense Consistency / Subject-Verb Agreement", "explanation": "penjelasan aturan tata bahasa"}]. Jika tidak ada kesalahan, kembalikan [].`;
+
+        const userPrompt = `Periksa tata bahasa dan konsistensi level kalimat pada naskah berikut (Dialek: ${language}):\n\n"""\n${text}\n"""`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: userPrompt,
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+          },
+        });
+
+        const rawJson = response.text?.trim() || '[]';
+        let parsedItems: LLMCorrectionItem[] = [];
+
+        try {
+          parsedItems = JSON.parse(rawJson);
+          if (!Array.isArray(parsedItems)) {
+            parsedItems = [];
+          }
+        } catch {
+          parsedItems = [];
+        }
+
+        // ==========================================
+        // STRICT DIFF-LOCK ANTI-PARAPHRASE FILTER
+        // ==========================================
+        const deepMatches: GrammarMatch[] = [];
+        let searchCursor = 0;
+
+        for (let idx = 0; idx < parsedItems.length; idx++) {
+          const item = parsedItems[idx];
+          if (!item.original || !item.fixed) continue;
+
+          const origStr = item.original.trim();
+          const fixedStr = item.fixed.trim();
+
+          // Rule 1: Word difference check (diff > 2 words rejected)
+          const origWords = origStr.split(/\s+/).filter(Boolean).length;
+          const fixedWords = fixedStr.split(/\s+/).filter(Boolean).length;
+          if (Math.abs(origWords - fixedWords) > 2) {
+            // Discard suggestion to prevent rewriting/paraphrasing
+            continue;
+          }
+
+          // Rule 2: Exact occurrence check in source text
+          let offset = text.indexOf(origStr, searchCursor);
+          if (offset === -1) {
+            offset = text.indexOf(origStr);
+          }
+          if (offset === -1) {
+            // Original string does not exist in user text, discard
+            continue;
+          }
+
+          searchCursor = offset + origStr.length;
+
+          // Rule 3: Format identical to LanguageTool output
+          deepMatches.push({
+            id: `deep_${idx}_${offset}_${origStr.length}`,
+            offset,
+            length: origStr.length,
+            originalText: origStr,
+            message:
+              item.explanation ||
+              'Perlu perbaikan tata bahasa atau konsistensi kalimat.',
+            shortMessage: item.category || 'Deep Check',
+            replacements: [{ value: fixedStr }],
+            rule: {
+              id: `DEEP_${(item.category || 'GRAMMAR').replace(/\s+/g, '_').toUpperCase()}`,
+              description: item.explanation || 'Aturan konsistensi kalimat',
+              issueType: 'grammar',
+              category: {
+                id: 'DEEP_SENTENCE_CHECK',
+                name: item.category || 'Sentence Consistency',
+              },
+            },
+          });
+        }
+
+        // Sort by character offset
+        deepMatches.sort((a, b) => a.offset - b.offset);
+
+        return NextResponse.json({
+          matches: deepMatches,
+          count: deepMatches.length,
+          mode: 'deep',
+        });
+      } catch (geminiErr: unknown) {
+        console.error('Gemini Deep Check Error:', geminiErr);
+        return NextResponse.json(
+          {
+            error: `Gagal menjalankan Deep Sentence Check via Gemini: ${(geminiErr as Error)?.message}`,
+            details: (geminiErr as Error)?.message,
+          },
+          { status: 502 }
+        );
+      }
+    }
+
+    // ==========================================
+    // MODE: FAST (Default LanguageTool Engine)
+    // ==========================================
+    const targetUrl =
+      customEndpoint?.trim() || 'https://api.languagetool.org/v2/check';
 
     const params = new URLSearchParams();
     params.append('text', text);
@@ -157,12 +295,14 @@ export async function POST(req: NextRequest) {
         const originalText = text.substring(m.offset, m.offset + m.length);
         const uniqueId = `match_${idx}_${m.offset}_${m.length}_${m.rule?.id || 'rule'}`;
 
-        const replacements: ReplacementOption[] = (m.replacements || []).slice(0, 5).map(
-          (r: LanguageToolRawReplacement) => ({
+        const replacements: ReplacementOption[] = (
+          m.replacements || []
+        )
+          .slice(0, 5)
+          .map((r: LanguageToolRawReplacement) => ({
             value: r.value,
             shortDescription: r.shortDescription || undefined,
-          })
-        );
+          }));
 
         return {
           id: uniqueId,
@@ -195,7 +335,6 @@ export async function POST(req: NextRequest) {
       let match: RegExpExecArray | null;
       while ((match = regex.exec(text)) !== null) {
         const extracted = rule.extract(match);
-        // Check if an existing match already covers this range
         const alreadyFlagged = mappedMatches.some(
           (m) =>
             Math.max(m.offset, extracted.offset) <
@@ -222,12 +361,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Sort all matches by character offset
     mappedMatches.sort((a, b) => a.offset - b.offset);
 
     return NextResponse.json({
       matches: mappedMatches,
       count: mappedMatches.length,
+      mode: 'fast',
       software: data.software,
     });
   } catch (err: unknown) {

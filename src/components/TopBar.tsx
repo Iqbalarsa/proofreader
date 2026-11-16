@@ -19,6 +19,8 @@ interface TopBarProps {
   saveFeedback: boolean;
   docCount: number;
   onOpenDocuments: () => void;
+  onRunDeepCheck: () => void;
+  isCheckingDeep: boolean;
   jargonCount: number;
   onOpenJargon: () => void;
   onOpenSettings: () => void;
@@ -38,6 +40,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   saveFeedback,
   docCount,
   onOpenDocuments,
+  onRunDeepCheck,
+  isCheckingDeep,
   jargonCount,
   onOpenJargon,
   onOpenSettings,
@@ -97,6 +101,18 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         {/* Right: Essential Clean Liquid Glass Actions */}
         <div className="flex items-center gap-2 text-xs">
+          {/* Deep Sentence Check Button */}
+          <button
+            onClick={onRunDeepCheck}
+            disabled={isCheckingDeep || isChecking}
+            className="px-3.5 py-1.5 rounded-full bg-neutral-900 hover:bg-black text-white font-medium shadow-sm transition-all disabled:opacity-50 text-xs border border-black/20"
+            title="Pemeriksaan tata bahasa level kalimat menggunakan Gemini dengan Strict Diff-Lock"
+          >
+            {isCheckingDeep
+              ? 'Memeriksa Kalimat...'
+              : 'Periksa Level Kalimat (Deep Check)'}
+          </button>
+
           {/* Copy Button */}
           <button
             onClick={onCopyText}

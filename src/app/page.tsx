@@ -49,6 +49,7 @@ export default function ProofreaderPage() {
   const [matches, setMatches] = useState<GrammarMatch[]>([]);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState<boolean>(false);
+  const [isCheckingDeep, setIsCheckingDeep] = useState<boolean>(false);
   const [language, setLanguage] = useState<string>('en-US');
 
   // Modals
@@ -77,6 +78,13 @@ export default function ProofreaderPage() {
     setDocuments(getAllDocuments());
 
     setJargonList(getJargonList());
+
+    try {
+      const savedSettings = localStorage.getItem('academic_proofreader_settings_v2');
+      if (savedSettings) {
+        setSettings(JSON.parse(savedSettings));
+      }
+    } catch {}
   }, []);
 
   // Filter matches whenever raw matches or jargon list updates
@@ -132,6 +140,43 @@ export default function ProofreaderPage() {
     },
     []
   );
+
+  // Deep Sentence Check via Google Gemini (Strict Diff-Lock)
+  const handleRunDeepCheck = async () => {
+    const clean = text.trim();
+    if (!clean) return;
+
+    setIsCheckingDeep(true);
+    try {
+      const res = await fetch('/api/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          language,
+          mode: 'deep',
+          geminiApiKey: settings.geminiApiKey,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setMatches(data.matches || []);
+      } else {
+        alert(
+          data.error ||
+            'Gagal menjalankan Deep Sentence Check. Pastikan GEMINI_API_KEY sudah dikonfigurasi.'
+        );
+        if (data.error?.includes('GEMINI_API_KEY')) {
+          setIsSettingsOpen(true);
+        }
+      }
+    } catch (err: unknown) {
+      alert(`Gagal menghubungi server: ${(err as Error)?.message}`);
+    } finally {
+      setIsCheckingDeep(false);
+    }
+  };
 
   // Debounced auto-save and auto-check
   useEffect(() => {
@@ -314,6 +359,8 @@ export default function ProofreaderPage() {
         saveFeedback={saveFeedback}
         docCount={documents.length}
         onOpenDocuments={() => setIsDocsOpen(true)}
+        onRunDeepCheck={handleRunDeepCheck}
+        isCheckingDeep={isCheckingDeep}
         jargonCount={jargonList.length}
         onOpenJargon={() => setIsJargonOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -386,6 +433,12 @@ export default function ProofreaderPage() {
         settings={settings}
         onSaveSettings={(newSettings) => {
           setSettings(newSettings);
+          try {
+            localStorage.setItem(
+              'academic_proofreader_settings_v2',
+              JSON.stringify(newSettings)
+            );
+          } catch {}
           runGrammarCheck(text, language, newSettings);
         }}
       />

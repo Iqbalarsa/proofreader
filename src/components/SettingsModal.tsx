@@ -225,6 +225,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </span>
             </label>
           </div>
+
+          {/* Section 3: Gemini API Key for Deep Check */}
+          <div className="space-y-3">
+            <div className="font-medium text-sm text-neutral-900 border-b border-neutral-200/60 pb-1">
+              Google Gemini API Key (Deep Sentence Check)
+            </div>
+            <p className="text-neutral-600 leading-relaxed">
+              Diperlukan untuk menjalankan fitur <strong>Deep Sentence Check</strong> (gemini-2.5-flash) dengan Strict Diff-Lock anti-paraphrase. Dapat juga diset melalui file <code>.env.local</code>.
+            </p>
+            <input
+              type="password"
+              value={localSettings.geminiApiKey || ''}
+              onChange={(e) =>
+                setLocalSettings({
+                  ...localSettings,
+                  geminiApiKey: e.target.value,
+                })
+              }
+              placeholder="AIzaSy..."
+              className="w-full bg-white/80 border border-neutral-300 rounded-full px-4 py-1.5 text-xs font-mono"
+            />
+          </div>
         </div>
 
         {/* Modal Footer */}
